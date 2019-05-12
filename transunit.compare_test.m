@@ -31,7 +31,8 @@
 
 %-----------------------------------------------------------------------------%
 % NOTE: this runner does NOT catch exceptions!
-:- pred run_test(pred(A, B), A, B, maybe.maybe_error).
+:- pred run_test(pred(A, B), A, B, maybe.maybe_error)
+    <= compare(B).
 :- mode run_test(pred(in, out) is det, in, in, out) is det.
 :- mode run_test(pred(di, out) is det, di, in, out) is det.
 :- mode run_test(pred(in, out) is cc_multi, in, in, out) is det.
@@ -43,7 +44,8 @@
 
 %-----------------------------------------------------------------------------%
 
-:- pred run_test(pred(A, B, State, State), A, B, maybe.maybe_error, State, State).
+:- pred run_test(pred(A, B, State, State), A, B, maybe.maybe_error, State, State)
+    <= compare(B).
 :- mode run_test(pred(in, out, di, uo) is det, in, in, out, di, uo) is det.
 :- mode run_test(pred(in, out, in, out) is det, in, in, out, in, out) is det.
 :- mode run_test(pred(di, out, di, uo) is det, di, in, out, di, uo) is det.
@@ -55,7 +57,8 @@
 
 %-----------------------------------------------------------------------------%
 
-:- pred run_test(pred(T, State, State), T, maybe.maybe_error, State, State).
+:- pred run_test(pred(T, State, State), T, maybe.maybe_error, State, State)
+    <= compare(T).
 :- mode run_test(pred(out, di, uo) is det, in, out, di, uo) is det.
 :- mode run_test(pred(out, in, out) is det, in, out, in, out) is det.
 :- mode run_test(pred(out, di, uo) is cc_multi, in, out, di, uo) is det.
@@ -66,13 +69,15 @@
 % error is transformed into the maybe_error result using io.error_message.
 % If the result is io.ok, the value is tested against the expected result as
 % usual. 
-:- pred run_io_test(pred(A, io.res(B), State, State), A, B, maybe.maybe_error, State, State).
+:- pred run_io_test(pred(A, io.res(B), State, State), A, B, maybe.maybe_error, State, State)
+    <= compare(B).
 :- mode run_io_test(pred(in, out, di, uo) is det, in, in, out, di, uo) is det.
 :- mode run_io_test(pred(di, out, di, uo) is det, di, in, out, di, uo) is det.
 
 %-----------------------------------------------------------------------------%
 % Similar to run_test/6, but supports semidet inputs.
-:- pred run_backtrack_test(pred(A, B, State, State), A, B, maybe.maybe_error, State, State).
+:- pred run_backtrack_test(pred(A, B, State, State), A, B, maybe.maybe_error, State, State)
+    <= compare(B).
 :- mode run_backtrack_test(pred(in, out, in, out) is semidet, in, in, out, in, out) is det.
 :- mode run_backtrack_test(pred(in, out, mdi, muo) is semidet, in, in, out, mdi, muo) is det.
 :- mode run_backtrack_test(pred(mdi, out, in, out) is semidet, mdi, in, out, in, out) is det.
@@ -82,7 +87,8 @@
 :- mode run_backtrack_test(pred(mdi, out, in, out) is cc_nondet, mdi, in, out, in, out) is det.
 :- mode run_backtrack_test(pred(mdi, out, mdi, muo) is cc_nondet, mdi, in, out, mdi, muo) is det.
 
-:- pred run_backtrack_test(pred(T, State, State), T, maybe.maybe_error, State, State).
+:- pred run_backtrack_test(pred(T, State, State), T, maybe.maybe_error, State, State)
+    <= compare(T).
 :- mode run_backtrack_test(pred(out, in, out) is semidet, in, out, in, out) is det.
 :- mode run_backtrack_test(pred(out, mdi, muo) is semidet, in, out, mdi, muo) is det.
 :- mode run_backtrack_test(pred(out, in, out) is cc_nondet, in, out, in, out) is det.
@@ -91,12 +97,6 @@
 %=============================================================================%
 :- implementation.
 %=============================================================================%
-
-% DUMMY
-:- func compare(T, T) = maybe.maybe_error.
-
-compare(A, B) = Result :-
-    ( A = B -> Result = maybe.ok ; Result = maybe.error("!=") ).
 
 %-----------------------------------------------------------------------------%
 
