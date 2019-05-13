@@ -59,10 +59,6 @@
 
 %------------------------------------------------------------------------------%
 
-:- func simple_compare(T, T) = maybe.maybe_error.
-
-%------------------------------------------------------------------------------%
-
 :- func negate(float) = float.
 
 %------------------------------------------------------------------------------%
@@ -136,7 +132,8 @@
 ].
 
 :- instance to_string(maybe.maybe(T)) <= to_string(T) where [
-    (to_string(maybe.yes(That)) = to_string(That)),
+    (to_string(maybe.yes(That)) =
+        string.append("maybe.yes(", string.append(to_string(That), ")"))),
     (to_string(maybe.no) = "maybe.no")
 ].
 
@@ -151,11 +148,6 @@ generic_compare(A, B) = Result :-
         Message = string.join_list(" != ", map(to_string, [A|[B|[]]])),
         Result = maybe.error(Message)
     ).
-
-%------------------------------------------------------------------------------%
-
-simple_compare(A, B) = Result :-
-    ( A = B -> Result = maybe.ok ; Result = maybe.error("Not equal") ).
 
 %------------------------------------------------------------------------------%
 
@@ -245,7 +237,12 @@ accumulate_mismatch(A, B, !List, I, int.plus(I, 1)) :-
 ].
 
 :- instance compare(maybe.maybe(T)) <= (to_string(T), compare(T)) where [
-    func(compare/2) is generic_compare
+    ( compare(maybe.no, maybe.no) = maybe.ok ),
+    ( compare(maybe.no, maybe.yes(B)) = maybe.error(
+        string.append("maybe.no != maybe.yes(", string.append(to_string(B), ")")) )),
+    ( compare(maybe.yes(A), maybe.no) = maybe.error(
+        string.append("maybe.yes(", string.append(to_string(A), ") != maybe.no")) )),
+    ( compare(maybe.yes(A), maybe.yes(B)) = compare(A, B) )
 ].
 
 :- instance compare(array.array(T)) <= (to_string(T), compare(T)) where [
