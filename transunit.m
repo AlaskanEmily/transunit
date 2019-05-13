@@ -119,19 +119,22 @@ run_test(Pred, Name, !IO) :-
     ( Pred(unit.unit) -> Result = success_message ; Result = failure_message ),
     io.write_string(Result, !IO),
     io.write_char((' '), !IO),
-    io.write_line(Name, !IO).
+    io.write_string(Name, !IO),
+    io.nl(!IO).
 
 %-----------------------------------------------------------------------------%
 
 run_result_test(Pred, Name, !IO) :-
     Pred(Result, !IO),
-    io.write_line(test_result(Result, Name), !IO).
+    io.write_string(test_result(Result, Name), !IO),
+    io.nl(!IO).
 
 %-----------------------------------------------------------------------------%
 
 run_result_test(Pred, Name, !State, !IO) :-
     Pred(Result, !State),
-    io.write_line(test_result(Result, Name), !IO).
+    io.write_string(test_result(Result, Name), !IO),
+    io.nl(!IO).
 
 %-----------------------------------------------------------------------------%
 
