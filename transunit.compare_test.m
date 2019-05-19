@@ -1,4 +1,4 @@
-% Copyright (C) 2019 Alaskan Emily, Transnat Games.
+% Copyright (C) 2018-2019 Alaskan Emily, Transnat Games.
 %
 % This software is provided 'as-is', without any express or implied warranty.
 % In no event will the authors be held liable for any damages arising from
