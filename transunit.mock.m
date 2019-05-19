@@ -19,7 +19,7 @@
 %   3. This notice may not be removed or altered from any source distribution.
 %
 
-:- module mock.
+:- module transunit.mock.
 
 %=============================================================================%
 % Implementation of a basic mock type. This is useful for implementing a
@@ -36,6 +36,10 @@
 % A mock represents a list of results that can be given as output.
 % It is operationally equivalent to a list.
 :- type mock(T).
+
+%-----------------------------------------------------------------------------%
+% Determines if a mock will repeat its contents or not.
+:- type mock_option ---> repeat ; oneshot.
 
 %-----------------------------------------------------------------------------%
 % Determines if the mock considers any form of contention to be a fatal error.
@@ -58,22 +62,51 @@
 :- type maybe_state_mock(T) == state_mock(maybe.maybe(T)).
 
 %-----------------------------------------------------------------------------%
-% Creates a mock from a list of inputs.
+% Creates a oneshot mock from a list of inputs.
 :- func init_mock(list(T)) = mock(T).
 
 %-----------------------------------------------------------------------------%
-% Creates a mock from an array of inputs.
+% Creates a mock from a list of inputs.
+:- func init_mock(mock_option, list(T)) = mock(T).
+
+%-----------------------------------------------------------------------------%
+% Creates a oneshot mock from an array of inputs.
 :- func init_mock_from_array(array.array(T)) = mock(T).
 
 %-----------------------------------------------------------------------------%
-% Creates a state_mock from a list of inputs.
-:- pred init_state_mock(list(T), state_option, state_mock(T), io.io, io.io).
+% Creates a mock from an array of inputs.
+:- func init_mock_from_array(mock_option, array.array(T)) = mock(T).
+
+%-----------------------------------------------------------------------------%
+% Creates a oneshot state_mock from a list of inputs.
+:- pred init_state_mock(state_option,
+    list(T),
+    state_mock(T),
+    io.io, io.io).
 :- mode init_state_mock(in, in, out, di, uo) is det.
 
 %-----------------------------------------------------------------------------%
+% Creates a state_mock from a list of inputs.
+:- pred init_state_mock(state_option,
+    mock_option,
+    list(T),
+    state_mock(T),
+    io.io, io.io).
+:- mode init_state_mock(in, in, in, out, di, uo) is det.
+
+%-----------------------------------------------------------------------------%
 % Creates a state_mock from an array of inputs.
-:- pred init_state_mock_from_array(array.array(T),
-    state_option,
+:- pred init_state_mock_from_array(state_option,
+    mock_option,
+    array.array(T),
+    state_mock(T),
+    io.io, io.io).
+:- mode init_state_mock_from_array(in, in, in, out, di, uo) is det.
+
+%-----------------------------------------------------------------------------%
+% Creates a oneshot state_mock from an array of inputs.
+:- pred init_state_mock_from_array(state_option,
+    array.array(T),
     state_mock(T),
     io.io, io.io).
 :- mode init_state_mock_from_array(in, in, out, di, uo) is det.
@@ -120,17 +153,28 @@
 %=============================================================================%
 
 :- use_module exception.
+:- use_module int.
 :- use_module thread.
+:- use_module std_util.
 :- use_module thread.mvar.
 
 %-----------------------------------------------------------------------------%
 
-:- type mock(T) ---> mock(list(T)).
+:- type mock(T) --->
+    repeat(array.array(T), int) ;
+    oneshot(list(T)).
+
 :- type state_mock(T) ---> state_mock(thread.mvar.mvar(mock(T)), state_option).
 
 %-----------------------------------------------------------------------------%
 
-init_mock(List) = mock(List).
+init_mock(List) = oneshot(List).
+
+%-----------------------------------------------------------------------------%
+
+init_mock(oneshot, List) = oneshot(List).
+init_mock(repeat, []) = oneshot([]).
+init_mock(repeat, List) = repeat(array.array(List), 0) :- List = [_|_].
 
 %-----------------------------------------------------------------------------%
 
@@ -138,36 +182,89 @@ init_mock_from_array(A) = init_mock(array.to_list(A)).
 
 %-----------------------------------------------------------------------------%
 
-init_state_mock(List, Option, state_mock(Mvar, Option), !IO) :-
+init_mock_from_array(oneshot, A) = oneshot(array.to_list(A)).
+init_mock_from_array(repeat, A) = Result :-
+    array.bounds(A, Low, High),
+    builtin.compare(Cmp, Low, High),
+    (
+        Cmp = (=), Result = oneshot([])
+    ;
+        Cmp = (<), Result = repeat(array.copy(A), Low)
+    ;
+        Cmp = (>),
+        exception.throw(exception.software_error("Invalid array bounds"))
+    ).
+
+%-----------------------------------------------------------------------------%
+
+init_state_mock(Option, List, state_mock(Mvar, Option), !IO) :-
     thread.mvar.init(init_mock(List), Mvar, !IO).
 
 %-----------------------------------------------------------------------------%
 
-init_state_mock_from_array(A, Option, Out, !IO) :-
-    init_state_mock(array.to_list(A), Option, Out, !IO).
+init_state_mock(Option, MockOption, List, state_mock(Mvar, Option), !IO) :-
+    thread.mvar.init(init_mock(MockOption, List), Mvar, !IO).
 
 %-----------------------------------------------------------------------------%
 
-mock_retrieve(maybe.no, mock([]), mock([])).
-mock_retrieve(maybe.yes(T), mock([T|List]), mock(List)).
+init_state_mock_from_array(Option, A, state_mock(Mvar, Option), !IO) :-
+    thread.mvar.init(init_mock_from_array(A), Mvar, !IO).
 
 %-----------------------------------------------------------------------------%
 
-maybe_mock_retrieve(maybe.no, mock([]), mock([])).
-maybe_mock_retrieve(T, mock([T|List]), mock(List)).
+init_state_mock_from_array(Option, MockOption, A, state_mock(Mvar, Option), !IO) :-
+    thread.mvar.init(init_mock_from_array(MockOption, A), Mvar, !IO).
 
 %-----------------------------------------------------------------------------%
 
-mock_try_retrieve(T, mock([T|List]), mock(List)).
+:- pred repeat_mock_retrieve(array.array(T), int, T, mock(T)).
+:- mode repeat_mock_retrieve(in, in, out, out) is det.
+
+repeat_mock_retrieve(A, I, T, repeat(A, N)) :-
+    array.unsafe_lookup(A, I, T),
+    array.bounds(A, Low, High),
+    M = int.plus(I, 1),
+    builtin.compare(Cmp, M, High),
+    (
+        Cmp = (=), N = Low
+    ;
+        Cmp = (<), N = M
+    ;
+        Cmp = (>),
+        exception.throw(exception.software_error("Invalid repeat index"))
+    ).
+
+%-----------------------------------------------------------------------------%
+
+mock_retrieve(maybe.no, oneshot([]), oneshot([])).
+mock_retrieve(maybe.yes(T), oneshot([T|List]), oneshot(List)).
+mock_retrieve(maybe.yes(T), repeat(A, I), Out) :-
+    repeat_mock_retrieve(A, I, T, Out).
+
+%-----------------------------------------------------------------------------%
+
+maybe_mock_retrieve(maybe.no, oneshot([]), oneshot([])).
+maybe_mock_retrieve(T, oneshot([T|List]), oneshot(List)).
+maybe_mock_retrieve(T, repeat(A, I), Out) :-
+    repeat_mock_retrieve(A, I, T, Out).
+
+%-----------------------------------------------------------------------------%
+
+mock_try_retrieve(T, oneshot([T|List]), oneshot(List)).
+mock_try_retrieve(T, In, Out) :-
+    require_det (
+        In = repeat(A, I),
+        repeat_mock_retrieve(A, I, T, Out)
+    ).
 
 %-----------------------------------------------------------------------------%
 % Gets the mock from a state_mock.
 % - In threadsafe mode this will block for the mock to be available.
 % - In not-threadsafe mode this will error if the mock is not available.
-:- pred get_mock(state_mock(T), mock(T), thread.mvar.mvar(mock(T)), io.io, io.io).
+:- pred get_mock(state_mock(T), thread.mvar.mvar(mock(T)), mock(T), io.io, io.io).
 :- mode get_mock(in, out, out, di, uo) is det.
 
-get_mock(state_mock(Mvar, not_threadsafe), Mock, Mvar, !IO) :-
+get_mock(state_mock(Mvar, not_threadsafe), Mvar, Mock, !IO) :-
     thread.mvar.try_take(Mvar, MaybeMock, !IO),
     (
         MaybeMock = maybe.yes(Mock)
@@ -176,20 +273,19 @@ get_mock(state_mock(Mvar, not_threadsafe), Mock, Mvar, !IO) :-
         MaybeMock = maybe.no,
         exception.throw(exception.software_error("Invalid state in state_mock"))
     ).
-get_mock(state_mock(Mvar, threadsafe), Mock, Mvar, !IO) :-
+get_mock(state_mock(Mvar, threadsafe), Mvar, Mock, !IO) :-
     thread.mvar.take(Mvar, Mock, !IO).
 
 %-----------------------------------------------------------------------------%
 
 state_mock_retrieve(StateMock, Out, !IO) :-
-    get_mock(StateMock, MockIn, Mvar, !IO),
+    get_mock(StateMock, Mvar, MockIn, !IO),
     mock_retrieve(Out, MockIn, MockOut),
     thread.mvar.put(Mvar, MockOut, !IO).
 
 %-----------------------------------------------------------------------------%
 
 maybe_state_mock_retrieve(StateMock, Out, !IO) :-
-    get_mock(StateMock, MockIn, Mvar, !IO),
+    get_mock(StateMock, Mvar, MockIn, !IO),
     maybe_mock_retrieve(Out, MockIn, MockOut),
     thread.mvar.put(Mvar, MockOut, !IO).
-
