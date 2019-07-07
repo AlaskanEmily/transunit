@@ -55,6 +55,8 @@
 :- instance compare(maybe.maybe(T)) <= (to_string(T), compare(T)).
 :- instance compare(array.array(T)) <= (to_string(T), compare(T)).
 :- instance compare(array2d.array2d(T)) <= (to_string(T), compare(T)).
+:- instance compare(maybe.maybe_error(T, E))
+    <= (to_string(T), compare(T), to_string(E), compare(E)).
 
 %------------------------------------------------------------------------------%
 
@@ -295,6 +297,21 @@ accumulate_mismatch(A, B, !List, I, int.plus(I, 1)) :-
             Result = maybe.error(string.join_list("\n", [W|[H|[]]]))
         )
     )
+].
+
+:- instance transunit.compare(maybe.maybe_error(T, E))
+    <= (transunit.to_string(T), transunit.compare(T),
+        transunit.to_string(E), transunit.compare(E)) where [
+    ( compare(maybe.ok(A), maybe.ok(B)) = transunit.compare(A, B) ),
+    ( compare(maybe.error(A), maybe.error(B)) = transunit.compare(A, B) ),
+    ( compare(maybe.ok(OK), maybe.error(E)) =
+        maybe.error(string.append(
+            string.append("OK:", transunit.to_string(OK)),
+            string.append(" != Error:", transunit.to_string(E)))) ),
+    ( compare(maybe.error(E), maybe.ok(OK)) =
+        maybe.error(string.append(
+            string.append("Error:", transunit.to_string(E)),
+            string.append(" != OK:", transunit.to_string(OK)))) )
 ].
 
 %------------------------------------------------------------------------------%
