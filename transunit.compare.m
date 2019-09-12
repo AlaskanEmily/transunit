@@ -30,6 +30,7 @@
 
 :- use_module bool.
 :- use_module rbtree.
+:- use_module pair.
 :- use_module array.
 :- use_module array2d.
 :- use_module set.
@@ -41,6 +42,7 @@
 :- instance to_string(float).
 :- instance to_string(bool.bool).
 :- instance to_string(maybe.maybe(T)) <= to_string(T).
+:- instance to_string(pair.pair(A, B)) <= (to_string(A), to_string(B)).
 
 %------------------------------------------------------------------------------%
 
@@ -53,6 +55,7 @@
 :- instance compare(float).
 :- instance compare(bool.bool).
 :- instance compare(maybe.maybe(T)) <= (to_string(T), compare(T)).
+:- instance compare(pair.pair(A, B)) <= (to_string(A), to_string(B), compare(A), compare(B)).
 :- instance compare(array.array(T)) <= (to_string(T), compare(T)).
 :- instance compare(array2d.array2d(T)) <= (to_string(T), compare(T)).
 :- instance compare(maybe.maybe_error(T, E))
@@ -140,6 +143,13 @@
     (to_string(maybe.yes(That)) =
         string.append("maybe.yes(", string.append(to_string(That), ")"))),
     (to_string(maybe.no) = "maybe.no")
+].
+
+:- instance to_string(pair.pair(A, B)) <= (to_string(A), to_string(B)) where [
+    to_string(P) =
+        string.append(string.append(
+            to_string(pair.fst(P)), " - "),
+            to_string(pair.snd(P)))
 ].
 
 %------------------------------------------------------------------------------%
@@ -248,6 +258,48 @@ accumulate_mismatch(A, B, !List, I, int.plus(I, 1)) :-
     ( compare(maybe.yes(A), maybe.no) = maybe.error(
         string.append("maybe.yes(", string.append(to_string(A), ") != maybe.no")) )),
     ( compare(maybe.yes(A), maybe.yes(B)) = compare(A, B) )
+].
+
+:- instance compare(pair.pair(A, B)) <= (to_string(A), to_string(B), compare(A), compare(B)) where [
+    ( compare(A, B) = Result :-
+        A1 = pair.fst(A),
+        B1 = pair.fst(B),
+        A2 = pair.snd(A),
+        B2 = pair.snd(B),
+        
+        compare(A1, B1) = Cmp1,
+        compare(A2, B2) = Cmp2,
+        (
+            Cmp1 = maybe.ok,
+            (
+                Cmp2 = maybe.ok,
+                Result = maybe.ok
+            ;
+                Cmp2 = maybe.error(Err),
+                Result = maybe.error(string.append(string.append(string.append(
+                    to_string(A), " != "),
+                    " For second element:"),
+                    Err))
+            )
+        ;
+            Cmp1 = maybe.error(Err1),
+            (
+                Cmp2 = maybe.ok,
+                Result = maybe.error(string.append(string.append(string.append(
+                    to_string(A), " != "),
+                    " For first element:"),
+                    Err1))
+            ;
+                Cmp2 = maybe.error(Err2),
+                string.first_char(Err2Tail, ',', Err2),
+                Result = maybe.error(string.append(string.append(string.append(string.append(
+                    to_string(A), " != "),
+                    " For both elements element:"),
+                    Err1),
+                    Err2Tail))
+            )
+        )
+    )
 ].
 
 :- instance compare(array.array(T)) <= (to_string(T), compare(T)) where [
